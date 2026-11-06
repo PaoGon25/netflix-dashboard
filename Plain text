@@ -1,0 +1,147 @@
+app.py
+
+df = pd.read_csv("netflix_titles.csv")
+
+df = df.dropna(subset=["release_year"])
+
+ACCENT = "#E50914" # Netflix Red
+
+styles = {
+"box-shadow": "rgba(0,0,0,0.2) 0px 4px 8px",
+"border-radius": "5px",
+"padding": "10px",
+}
+
+
+content_type = pn.widgets.Select(
+name="Content Type",
+options=["Movie", "TV Show"],
+value="Movie"
+)
+
+year_slider = pn.widgets.IntSlider(
+name="Release Year",
+start=int(df["release_year"].min()),
+end=int(df["release_year"].max()),
+value=int(df["release_year"].max())
+)
+
+
+def filter_data(content_type, year):
+
+filtered = df[
+(df["type"] == content_type) &
+(df["release_year"] <= year)
+]
+
+return filtered
+
+@pn.depends(content_type, year_slider)
+def dashboard(content_type, year):
+
+filtered = filter_data(content_type, year)
+
+total_titles = len(filtered)
+
+avg_year = round(filtered["release_year"].mean(), 0)
+
+total_countries = filtered["country"].nunique()
+
+total_ratings = filtered["rating"].nunique()
+
+# KPI CARDS
+
+kpi1 = pn.indicators.Number(
+name="Total Titles",
+value=total_titles,
+format="{value:,.0f}"
+)
+
+kpi2 = pn.indicators.Number(
+name="Average Release Year",
+value=avg_year,
+format="{value:,.0f}"
+)
+
+kpi3 = pn.indicators.Number(
+name="Countries",
+value=total_countries,
+format="{value:,.0f}"
+)
+
+kpi4 = pn.indicators.Number(
+name="Ratings",
+value=total_ratings,
+format="{value:,.0f}"
+)
+
+indicators = pn.Row(kpi1, kpi2, kpi3, kpi4)
+
+# CHART 1
+
+releases = (
+filtered.groupby("release_year")
+.size()
+.reset_index(name="count")
+)
+
+chart1 = releases.hvplot.bar(
+x="release_year",
+y="count",
+color=ACCENT,
+title="Titles Released by Year",
+height=400,
+responsive=True
+)
+
+# CHART 2
+
+ratings = (
+filtered.groupby("rating")
+.size()
+.reset_index(name="count")
+.sort_values("count", ascending=False)
+)
+
+chart2 = ratings.hvplot.bar(
+x="rating",
+y="count",
+color="orange",
+title="Titles by Rating",
+height=400,
+responsive=True
+)
+
+# TABLE
+
+table = pn.widgets.Tabulator(
+filtered,
+pagination="local",
+page_size=10,
+sizing_mode="stretch_width"
+)
+
+tabs = pn.Tabs(
+("Release Year Analysis", pn.pane.HoloViews(chart1)),
+("Ratings Analysis", pn.pane.HoloViews(chart2)),
+("Dataset", table)
+)
+return pn.Column(indicators, tabs)
+
+# LAYOUT
+
+template = pn.template.FastListTemplate(
+title="Netflix Titles Dashboard",
+sidebar=[
+"## Filters",
+content_type,
+year_slider,
+],
+main=[
+dashboard
+],
+accent_base_color=ACCENT
+)
+
+template.servable()
+template
